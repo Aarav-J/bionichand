@@ -117,3 +117,8 @@ poetry.lock
 data/
 models/
 checkpoints/
+
+# Excluded directories
+handcontrolapp/
+server/newvenv/
+server/mpvenv/

@@ -260,7 +260,7 @@ def main():
                 curl_middle = compute_middle_curl(hand_landmarks)
                 curl_ring = compute_ring_curl(hand_landmarks)
                 curl_pinky = compute_pinky_curl(hand_landmarks)
-                curl_thumb = compute_thumb_curl_to_palm(hand_landmarks)
+                # curl_thumb = compute_thumb_curl_to_palm(hand_landmarks)
                 angle_index = compute_angle(curl_index)
                 angle_middle = compute_angle(curl_middle)
                 angle_ring = compute_angle(curl_ring)
@@ -268,7 +268,7 @@ def main():
                 if(angle_index > 100 and angle_middle > 100 and angle_ring > 100 and angle_pinky > 100):
                     requests.post(espaddress, json={"cmd": "set_value", "value": 0, "led": True})
 
-                if(check_threshold(angle_index, prev_angles[0])):
+                if(check_threshold(angle_igindex, prev_angles[0])):
                     prev_angles[0] = angle_index
                     requests.post(espaddress, json={"finger": "index", "angle": angle_index})
                 if(check_threshold(angle_middle, prev_angles[1])):
@@ -285,14 +285,14 @@ def main():
                 print(f"[{time.time()-start:5.2f}s] Middle servo angle: {angle_middle} (curl={curl_middle:.3f})")
                 print(f"[{time.time()-start:5.2f}s] Ring servo angle: {angle_ring} (curl={curl_ring:.3f})")
                 print(f"[{time.time()-start:5.2f}s] Pinky servo angle: {angle_pinky} (curl={curl_pinky:.3f})")
-                print(f"[{time.time()-start:5.2f}s] Thumb curl: {curl_thumb:.3f}")
+                # print(f"[{time.time()-start:5.2f}s] Thumb curl: {curl_thumb:.3f}")
                 print("-----")
                 # overlay on image
                 cv2.putText(image_out, f"Index angle: {angle_index} deg", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
                 cv2.putText(image_out, f"Middle angle: {angle_middle} deg", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
                 cv2.putText(image_out, f"Ring angle: {angle_ring} deg", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
                 cv2.putText(image_out, f"Pinky angle: {angle_pinky} deg", (10, 210), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
-                cv2.putText(image_out, f"Thumb curl: {curl_thumb:.3f}", (10, 270), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
+                # cv2.putText(image_out, f"Thumb curl: {curl_thumb:.3f}", (10, 270), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
 
                 
 
@@ -365,14 +365,14 @@ def image_processing(image):
             print(f"[{time.time()-start:5.2f}s] Middle servo angle: {angle_middle} (curl={curl_middle:.3f})")
             print(f"[{time.time()-start:5.2f}s] Ring servo angle: {angle_ring} (curl={curl_ring:.3f})")
             print(f"[{time.time()-start:5.2f}s] Pinky servo angle: {angle_pinky} (curl={curl_pinky:.3f})")
-            print(f"[{time.time()-start:5.2f}s] Thumb curl: {curl_thumb:.3f}")
+            # print(f"[{time.time()-start:5.2f}s] Thumb curl: {curl_thumb:.3f}")
             print("-----")
             # overlay on image
             cv2.putText(image_out, f"Index angle: {angle_index} deg", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
             cv2.putText(image_out, f"Middle angle: {angle_middle} deg", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
             cv2.putText(image_out, f"Ring angle: {angle_ring} deg", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
             cv2.putText(image_out, f"Pinky angle: {angle_pinky} deg", (10, 210), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
-            cv2.putText(image_out, f"Thumb curl: {curl_thumb:.3f}", (10, 270), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
+            # cv2.putText(image_out, f"Thumb curl: {curl_thumb:.3f}", (10, 270), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
         else: 
             cv2.putText(image_out, "No hand detected", (10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
         return image_out
