@@ -5,12 +5,14 @@ import mediapipe as mp
 import math
 import numpy as np
 import requests
+import threading
+import traceback
 
 
 # Simple mapping parameters
-espaddress = "http://100.70.9.64/data"
-SERVO_MIN = 20    # degrees
-SERVO_MAX = 160   # degrees
+espaddress = "http://100.70.0.210/data"
+SERVO_MIN = 0    # degrees
+SERVO_MAX = 180   # degrees
 SMOOTH_ALPHA = 0.2  # EMA smoothing factor
 SAVE_CSV = False   # set True to save readings to simulate output.csv
 
@@ -27,6 +29,16 @@ def map_norm_to_servo(norm):
     # norm: 0 (finger far from mcp/open) .. 1 (finger close/curl)
     angle = SERVO_MIN + (SERVO_MAX - SERVO_MIN) * norm
     return int(clamp(angle, SERVO_MIN, SERVO_MAX))
+
+def _post_async(url, json_payload, timeout=0.8):
+    """Fire-and-forget POST with short timeout so network problems can't block processing."""
+    def _job():
+        try:
+            requests.post(url, json=json_payload, timeout=timeout)
+        except Exception:
+            # swallow errors to avoid killing the processing loop
+            pass
+    threading.Thread(target=_job, daemon=True).start()
 
 def compute_index_curl(landmarks):
     # landmarks are normalized
@@ -167,14 +179,6 @@ def compute_better_thumb_curl(landmarks, handedness=None, use_axis_proj=True, al
     return smoothed
 
 def compute_thumb_curl_to_palm(landmarks, prev_thumb=None, alpha=SMOOTH_ALPHA, combo_weight=0.6):
-    """
-    Estimate thumb curl by:
-     - palm_distance: normalized distance from TIP to palm centroid (wrist + MCPs).
-       When TIP moves closer to palm centroid => smaller distance => larger curl (1=open..0=closed inverted).
-     - x_proj: optional horizontal projection method (good for pure x motion).
-    Returns smoothed curl in [0..1] (0=open, 1=closed). If scale invalid returns None.
-    combo_weight controls mixing: 0.0 -> only palm-distance, 1.0 -> only x-projection.
-    """
     tip = landmarks[mp_hands.HandLandmark.THUMB_TIP]
     mcp = landmarks[mp_hands.HandLandmark.THUMB_MCP]
     wrist = landmarks[mp_hands.HandLandmark.WRIST]
@@ -265,21 +269,21 @@ def main():
                 angle_middle = compute_angle(curl_middle)
                 angle_ring = compute_angle(curl_ring)
                 angle_pinky = compute_angle(curl_pinky)
-                if(angle_index > 100 and angle_middle > 100 and angle_ring > 100 and angle_pinky > 100):
-                    requests.post(espaddress, json={"cmd": "set_value", "value": 0, "led": True})
+                # if(angle_index > 100 and angle_middle > 100 and angle_ring > 100 and angle_pinky > 100):
+                #     requests.post(espaddress, json={"cmd": "set_value", "value": 0, "led": True})
 
-                if(check_threshold(angle_igindex, prev_angles[0])):
-                    prev_angles[0] = angle_index
-                    requests.post(espaddress, json={"finger": "index", "angle": angle_index})
-                if(check_threshold(angle_middle, prev_angles[1])):
-                    prev_angles[1] = angle_middle
-                    requests.post(espaddress, json={"finger": "middle", "angle": angle_middle})
-                if(check_threshold(angle_ring, prev_angles[2])):
-                    prev_angles[2] = angle_ring
-                    requests.post(espaddress, json={"finger": "ring", "angle": angle_ring})
-                if(check_threshold(angle_pinky, prev_angles[3])):
-                    prev_angles[3] = angle_pinky
-                    requests.post(espaddress, json={"finger": "pinky", "angle": angle_pinky})
+                # if(check_threshold(angle_index, prev_angles[0])):
+                #     prev_angles[0] = angle_index
+                #     requests.post(espaddress, json={"finger": "index", "angle": angle_index})
+                # if(check_threshold(angle_middle, prev_angles[1])):
+                #     prev_angles[1] = angle_middle
+                #     requests.post(espaddress, json={"finger": "middle", "angle": angle_middle})
+                # if(check_threshold(angle_ring, prev_angles[2])):
+                #     prev_angles[2] = angle_ring
+                #     requests.post(espaddress, json={"finger": "ring", "angle": angle_ring})
+                # if(check_threshold(angle_pinky, prev_angles[3])):
+                #     prev_angles[3] = angle_pinky
+                #     requests.post(espaddress, json={"finger": "pinky", "angle": angle_pinky})
             
                 print(f"[{time.time()-start:5.2f}s] Index servo angle: {angle_index} (curl={curl_index:.3f})")
                 print(f"[{time.time()-start:5.2f}s] Middle servo angle: {angle_middle} (curl={curl_middle:.3f})")
@@ -319,64 +323,73 @@ def main():
         print("Saved simulated_servo_output.csv")
 start = time.time()
 prev_angles = [None, None, None, None]
-def image_processing(image): 
+_hands = mp_hands.Hands(model_complexity=0, min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
-    with mp_hands.Hands(model_complexity=0, min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
-
-        # flip the frame horizontally so processing and display use the selfie view
+def image_processing(image):
+    global _hands, prev_angles, start
+    try:
         image = cv2.flip(image, 1)
 
         image.flags.writeable = False
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        results = hands.process(image_rgb)
+        results = _hands.process(image_rgb)
 
         image.flags.writeable = True
         image_out = image.copy()
 
         if results.multi_hand_landmarks:
-            # use first detected hand
-            hand_landmarks = results.multi_hand_landmarks[0].landmark
-            curl_index = compute_index_curl(hand_landmarks)
-            curl_middle = compute_middle_curl(hand_landmarks)
-            curl_ring = compute_ring_curl(hand_landmarks)
-            curl_pinky = compute_pinky_curl(hand_landmarks)
+
+            for hand_landmarks in results.multi_hand_landmarks:
+                mp_drawing.draw_landmarks(
+                    image_out,
+                    hand_landmarks,
+                    mp_hands.HAND_CONNECTIONS,
+                    mp_drawing.DrawingSpec(color=(121, 22, 76), thickness=2, circle_radius=4),
+                    mp_drawing.DrawingSpec(color=(250, 44, 250), thickness=2, circle_radius=2),
+                )
+
+
+            first_hand = results.multi_hand_landmarks[0].landmark
+
+            curl_index = compute_index_curl(first_hand)
+            curl_middle = compute_middle_curl(first_hand)
+            curl_ring = compute_ring_curl(first_hand)
+            curl_pinky = compute_pinky_curl(first_hand)
 
             angle_index = compute_angle(curl_index)
             angle_middle = compute_angle(curl_middle)
             angle_ring = compute_angle(curl_ring)
             angle_pinky = compute_angle(curl_pinky)
-            if(angle_index > 100 and angle_middle > 100 and angle_ring > 100 and angle_pinky > 100):
-                requests.post(espaddress, json={"cmd": "set_value", "value": 0, "led": True})
 
-            if(check_threshold(angle_index, prev_angles[0])):
+            # only post if angle is valid and threshold says it changed
+            if angle_index is not None and check_threshold(angle_index, prev_angles[0]):
                 prev_angles[0] = angle_index
-                requests.post(espaddress, json={"finger": "index", "angle": angle_index})
-            if(check_threshold(angle_middle, prev_angles[1])):
+                _post_async(espaddress, {"finger": "index", "angle": angle_index})
+            if angle_middle is not None and check_threshold(angle_middle, prev_angles[1]):
                 prev_angles[1] = angle_middle
-                requests.post(espaddress, json={"finger": "middle", "angle": angle_middle})
-            if(check_threshold(angle_ring, prev_angles[2])):
+                _post_async(espaddress, {"finger": "middle", "angle": angle_middle})
+            if angle_ring is not None and check_threshold(angle_ring, prev_angles[2]):
                 prev_angles[2] = angle_ring
-                requests.post(espaddress, json={"finger": "ring", "angle": angle_ring})
-            if(check_threshold(angle_pinky, prev_angles[3])):
+                _post_async(espaddress, {"finger": "ring", "angle": angle_ring})
+            if angle_pinky is not None and check_threshold(angle_pinky, prev_angles[3]):
                 prev_angles[3] = angle_pinky
-                requests.post(espaddress, json={"finger": "pinky", "angle": angle_pinky})
-        
-            print(f"[{time.time()-start:5.2f}s] Index servo angle: {angle_index} (curl={curl_index:.3f})")
-            print(f"[{time.time()-start:5.2f}s] Middle servo angle: {angle_middle} (curl={curl_middle:.3f})")
-            print(f"[{time.time()-start:5.2f}s] Ring servo angle: {angle_ring} (curl={curl_ring:.3f})")
-            print(f"[{time.time()-start:5.2f}s] Pinky servo angle: {angle_pinky} (curl={curl_pinky:.3f})")
-            # print(f"[{time.time()-start:5.2f}s] Thumb curl: {curl_thumb:.3f}")
-            print("-----")
-            # overlay on image
+                _post_async(espaddress, {"finger": "pinky", "angle": angle_pinky})
+
+            # overlay angles on image
             cv2.putText(image_out, f"Index angle: {angle_index} deg", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
             cv2.putText(image_out, f"Middle angle: {angle_middle} deg", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
             cv2.putText(image_out, f"Ring angle: {angle_ring} deg", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
             cv2.putText(image_out, f"Pinky angle: {angle_pinky} deg", (10, 210), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
-            # cv2.putText(image_out, f"Thumb curl: {curl_thumb:.3f}", (10, 270), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
-        else: 
+        else:
             cv2.putText(image_out, "No hand detected", (10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
-        return image_out
 
+        return image_out
+    except Exception:
+        traceback.print_exc()
+        try:
+            return cv2.flip(image, 1)
+        except Exception:
+            return 255 * np.ones((240, 320, 3), dtype=np.uint8)
                 
 
 if __name__ == "__main__":

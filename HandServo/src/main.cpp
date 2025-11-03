@@ -2,9 +2,10 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ArduinoJson.h>
+// #include <Servo.h>
 
-
-static const int SERVO_PIN   = 7;      
+static const int SERVO_PINS[4]   = {13, 12, 14, 27};   
+   
 static const int MIN_US      = 500;    
 static const int MAX_US      = 2500;   
 static const int START_DEG   = 20;      
@@ -15,15 +16,19 @@ int fingerDegrees[] = {20,20,20,20};
 // Create a web server on port 80
 WebServer server(80);
 
-Servo servo;
+Servo indexFinger;
+Servo middleFinger; 
+Servo ringFinger;
+Servo pinkyFinger;
+static Servo* servos[4] = {&indexFinger, &middleFinger, &ringFinger, &pinkyFinger};
 
 int x;
 
 // simple, safe setter: 0..180 degrees
-void setServo(int deg) {
+void setServo(int deg, Servo* servo) {
   if (deg < 0)   deg = 0;
   if (deg > 180) deg = 180;
-  servo.write(deg);
+  if (servo) servo->write(deg);
 }
 
 void handleRoot() {
@@ -33,17 +38,17 @@ void handleRoot() {
 }
 
 void toggleLed() { 
-  digitalWrite(16, !digitalRead(16)); 
-  server.send(200, "text/plain", digitalRead(16) ? "LED is ON" : "LED is OFF"); 
+  digitalWrite(2, !digitalRead(2)); 
+  server.send(200, "text/plain", digitalRead(2) ? "LED is ON" : "LED is OFF"); 
 }
 void getLed() { 
-	  server.send(200, "text/plain", digitalRead(16) ? "1" : "0"); 
+	  server.send(200, "text/plain", digitalRead(2) ? "1" : "0"); 
 }
 
 void handleEcho() {
 	// echo query parameter ?msg=...
 	String m = server.arg("msg");
-  digitalWrite(16, HIGH); 
+  digitalWrite(2, HIGH); 
 	if (m.length() == 0) m = "(empty)";
 	server.send(200, "text/plain", "Echo: " + m);
 	Serial.println("[HTTP] GET /echo msg=" + m);
@@ -77,16 +82,19 @@ void handleData() {
   if(strcmp(finger, "index") == 0 && angle >= 0 && angle) { 
 	fingerDegrees[0] = angle; 
 	Serial.printf("Set index finger to %d degrees\n", angle);
-	servo.write(angle);
+	indexFinger.write(angle);
   } else if(strcmp(finger, "middle") == 0 && angle >= 0 && angle) { 
 	fingerDegrees[1] = angle; 
-	// Serial.printf("Set middle finger to %d degrees\n", angle); 
+	Serial.printf("Set middle finger to %d degrees\n", angle); 
+	middleFinger.write(angle);
   } else if(strcmp(finger, "ring") == 0 && angle >= 0 && angle) { 
 	fingerDegrees[2] = angle; 
-	// Serial.printf("Set ring finger to %d degrees\n", angle); 
+	Serial.printf("Set ring finger to %d degrees\n", angle); 
+	ringFinger.write(angle);
   } else if(strcmp(finger, "pinky") == 0 && angle >= 0 && angle) { 
 	fingerDegrees[3] = angle; 
-	// Serial.printf("Set pinky finger to %d degrees\n", angle); 
+	Serial.printf("Set pinky finger to %d degrees\n", angle); 
+	pinkyFinger.write(angle);
   } else { 
 	Serial.println("Invalid finger/angle");
   }
@@ -95,7 +103,7 @@ void handleData() {
   int value = doc["value"] | 0; 
   if(!doc["led"].isNull()) { 
     bool ledOn = doc["led"] | false; 
-    digitalWrite(16, ledOn ? HIGH : LOW); 
+    digitalWrite(2, ledOn ? HIGH : LOW); 
     Serial.printf("cmd=%s value=%d led=%d\n", cmd, value, ledOn); 
   }
   
@@ -114,16 +122,18 @@ void handleData() {
 void setup() {
 	Serial.begin(115200);
 	delay(200);
-  	pinMode(16, OUTPUT);
+  pinMode(2, OUTPUT);
 	ESP32PWM::allocateTimer(0);
-	servo.setPeriodHertz(50);
-	int ok = servo.attach(SERVO_PIN, MIN_US, MAX_US);
-	if(ok <= 0) {
-		Serial.println("ERROR: servo.attach() failed. Check pin mapping/wiring.");
-	} else {
-		Serial.println("Servo attached.");
-	}
-	setServo(START_DEG);
+  for(int i=0; i<4; i++) { 
+	servos[i]->setPeriodHertz(50); 
+	int ok = servos[i]->attach(SERVO_PINS[i], MIN_US, MAX_US); 
+	if(ok <= 0) { 
+	  Serial.printf("ERROR: servo.attach() failed for pin %d. Check pin mapping/wiring.\n", SERVO_PINS[i]); 
+	} else { 
+	  Serial.printf("Servo on pin %d attached.\n", SERVO_PINS[i]); 
+	} 
+	setServo(START_DEG, servos[i]); 
+  }
 	Serial.println("Starting WiFi...");
 	WiFi.begin(ssid, password);
 

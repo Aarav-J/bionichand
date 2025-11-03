@@ -1,6 +1,7 @@
 import React from "react";
 import { TouchableOpacity, View, Text, StyleSheet } from "react-native";
 import { MaterialCommunityIcons, FontAwesome6 } from "@expo/vector-icons";
+import {IconHandLoveYou} from "@tabler/icons-react-native";
 import { colors } from "../theme/colors";
 
 type Props = {
@@ -14,11 +15,18 @@ export default function PresetButton({ label, icon, onPress, library}: Props) {
   return (
     <TouchableOpacity onPress={onPress} style={styles.wrap} accessibilityLabel={`Preset ${label}`}>
       <View style={styles.circle}>
-        {library === "MaterialCommunityIcons" ? (
-          <MaterialCommunityIcons name={icon as any} size={28} color={colors.text} />
-        ) : (
-          <FontAwesome6 name={icon as any} size={28} color={colors.text} />
-        )}
+        {(() => {
+          switch(library) {
+            case "FontAwesome6":
+              return <FontAwesome6 name={icon as any} size={28} color={colors.text} />;
+            case "MaterialCommunityIcons":
+              return <MaterialCommunityIcons name={icon as any} size={28} color={colors.text} />;
+            case "Tabler":
+              return <IconHandLoveYou size={28} color={"white"}/>;
+            default:
+              return <FontAwesome6 name={icon as any} size={28} color={colors.text} />;
+          }
+        })()}
       </View>
       <Text style={styles.text}>{label}</Text>
     </TouchableOpacity>

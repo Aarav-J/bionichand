@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Card from "../components/Card";
@@ -8,14 +8,40 @@ import { colors } from "../theme/colors";
 import { fingers, fingerDisplay, Preset } from "../types";
 import { useHandStore } from "../store/handStore";
 // import { get } from "react-native/Libraries/TurboModule/TurboModuleRegistry";
-import { getAngles, postAngles } from "../utils/utils";
+import { getAngles, getLed, postAngles, toggleLed } from "../utils/utils";
+import { FontAwesome6 } from "@expo/vector-icons";
 export default function HomeScreen() {
   const currentAngles = useHandStore((s) => s.currentAngles);
   const desiredAngles = useHandStore((s) => s.desiredAngles);
   const setDesiredAngle = useHandStore((s) => s.setDesiredAngle);
   const applyPresetToDesired = useHandStore((s) => s.applyPresetToDesired);
   const setCurrentAngles = useHandStore((s) => s.setCurrentAngles);
+  const ledState = useHandStore((s) => s.ledState);
+  const setLedState = useHandStore((s) => s.setLedState);
+  const lastUpdated = useHandStore((s) => s.lastUpdated);
 
+  useEffect(() => { 
+    const fetchInitialAngles = async () => {
+      try {
+        const angles_received = await getAngles();
+        setCurrentAngles(angles_received as any);
+        setDesiredAngle("thumb", 20);
+        setDesiredAngle("index", angles_received.index);
+        setDesiredAngle("middle", angles_received.middle);
+        setDesiredAngle("ring", angles_received.ring);
+        setDesiredAngle("pinky", angles_received.pinky);
+      } catch (e) {
+        console.error('Error fetching initial angles', e);
+      }
+    }
+
+    const fetchLedState = async () => {
+      getLed().then(state => {
+        if (state !== ledState) setLedState(state);
+      });
+    }
+    fetchInitialAngles();
+  }, [])
   const presets: Preset[] = useMemo(
     () => [
       {
@@ -46,6 +72,13 @@ export default function HomeScreen() {
         library: "FontAwesome6",
         angles: { index: 130, middle: 20, thumb: 20, ring: 20, pinky: 20 },
       },
+      { 
+        id: "loveYou",
+        name: "Love You",
+        icon: "hand-love-you",
+        library: "Tabler",
+        angles: { thumb: 130, index: 20, middle: 130, ring: 130, pinky: 20 },
+      }
     ],
     []
   );
@@ -60,6 +93,13 @@ export default function HomeScreen() {
           }
     }, 30*1000);
     return () => clearInterval(intervalId);
+  }, []);
+
+  // local clock so the "seconds ago" updates every second without needing any other action
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
   }, []);
 
   const sendToDevice = async () => {
@@ -77,8 +117,22 @@ export default function HomeScreen() {
   return (
     <LinearGradient colors={[colors.bgTop, colors.bgBottom]} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Bionic Hand</Text>
+        <View style={styles.header}>
+          <Text style={styles.title}>Bionic Hand</Text>
+          <TouchableOpacity
+            style={[styles.iconBtn, ledState ? styles.iconBtnOn : null]}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle light"
+            onPress={async () => {
+              
+                // toggleLedState();
+                await toggleLed();
 
+            }}>
+            <FontAwesome6 name="lightbulb" size={20} color={ledState ? '#FFD54F' : colors.buttonText} />
+          </TouchableOpacity>
+        </View>
         <Card>
           <View>
             <View style={styles.rowBetween}>
@@ -93,6 +147,20 @@ export default function HomeScreen() {
                     <Text style={styles.gridValue}>{Math.round(currentAngles[f])}°</Text>
                 </View>
               ))}
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.rowBottom}>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>Last Updated: {((new Date().getTime() - new Date(lastUpdated).getTime()) / 1000).toFixed(0)}s ago • {new Date(lastUpdated).toLocaleTimeString()}</Text>
+              <TouchableOpacity onPress={async () => {
+                try {
+                  const angles_received = await getAngles();
+                  setCurrentAngles(angles_received as any);
+                } catch (e) {
+                  console.error('Error fetching angles on manual refresh', e);
+                }
+              }}>
+                <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: "600" }}>Refresh</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Card>
@@ -114,8 +182,8 @@ export default function HomeScreen() {
               label={fingerDisplay[f]}
                 value={desiredAngles[f]}
                 onChange={(v) => setDesiredAngle(f, v)}
-              min={2}
-              max={130}
+              min={0}
+              max={180}
             />
           ))}
         </Card>
@@ -135,7 +203,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 20},
+  container: { flex: 1, paddingTop: 40},
   scroll: { padding: 16, paddingTop: 20 },
   title: { color: colors.text, fontSize: 32, fontWeight: "800", marginBottom: 14 },
   sectionTitle: { color: colors.text, fontSize: 18, fontWeight: "700", marginVertical: 8 },
@@ -161,4 +229,31 @@ const styles = StyleSheet.create({
     shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
   },
   btnText: { color: colors.buttonText, fontWeight: "700" },
+  rowBottom: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+    paddingHorizontal: 2,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  iconBtnOn: {
+    backgroundColor: "rgba(255,213,79,0.12)",
+    shadowColor: "#FFD54F",
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+  },
 });
