@@ -1,6 +1,6 @@
 import { useHandStore } from "../store/handStore";
 
-const espaddress = "http://100.70.0.210/"
+const espaddress = "http://100.70.3.129/"
 
 export const getAngles = async (): Promise<Record<string, number>> => {
     const url = espaddress + "degrees";

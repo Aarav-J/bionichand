@@ -10,7 +10,7 @@ import traceback
 
 
 # Simple mapping parameters
-espaddress = "http://100.70.0.210/data"
+espaddress = "http://100.70.3.129/data"
 SERVO_MIN = 0    # degrees
 SERVO_MAX = 180   # degrees
 SMOOTH_ALPHA = 0.2  # EMA smoothing factor
@@ -227,7 +227,7 @@ def compute_angle(curl):
         prev_angle = angle
         return angle
 
-def check_threshold(angle, prev_angle, max_delta=10):
+def check_threshold(angle, prev_angle, max_delta=15):
     if prev_angle is None:
         return True
     if abs(angle - prev_angle) > max_delta:
