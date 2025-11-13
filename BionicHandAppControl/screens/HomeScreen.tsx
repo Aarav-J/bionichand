@@ -118,7 +118,7 @@ export default function HomeScreen() {
     <LinearGradient colors={[colors.bgTop, colors.bgBottom]} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Text style={styles.title}>Kade Stinks</Text>
+          <Text style={styles.title}>Hand Puppet</Text>
           <TouchableOpacity
             style={[styles.iconBtn, ledState ? styles.iconBtnOn : null]}
             activeOpacity={0.8}
